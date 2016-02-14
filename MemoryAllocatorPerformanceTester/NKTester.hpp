@@ -10,21 +10,42 @@
 namespace NKTester
 {
 	using std::thread;
-	using std::wcout;
 	using std::vector;
 	using std::function;
 	using std::endl;
 
-	class Tester
+	class TestConfig
 	{
 	public:
-		const static int COUNT_ALLOCATION = 10000;
-		const static int MIN_ALLOCATION_SIZE = 8;
-		const static int MAX_ALLOCATION_SIZE = 36 * 1024;
-		const static int COUNT_THREAD = 4;
-		const static int COUNT_TEST = 5;
+		wstring _log_name;
 
 	public:
+		int _count_thread;
+		int _count_test;
+		int _count_allocation;
+		int _min_allocation_size;
+		int _max_allocation_size;
+		function<void*(size_t)> _allocator;
+		function<void(void*)> _deallocator;
+
+	public:
+		TestConfig &operator = (const TestConfig &other)
+		{
+			_log_name = other._log_name;
+			_count_thread = other._count_thread;
+			_count_test = other._count_test;
+			_count_allocation = other._count_allocation;
+			_min_allocation_size = other._min_allocation_size;
+			_max_allocation_size = other._max_allocation_size;
+			_allocator = other._allocator;
+			_deallocator = other._deallocator;
+			return *this;
+		}
+	};
+
+	class Tester
+	{
+	protected:
 		class Result
 		{
 		public:
@@ -52,17 +73,17 @@ namespace NKTester
 			void run_sequentially(void)
 			{
 				PTRVECTOR ptr_vector;
-				ptr_vector.reserve(COUNT_ALLOCATION);
+				ptr_vector.reserve(_config._count_allocation);
 
-				for (int i = 0; i < COUNT_TEST; ++i)
+				for (int i = 0; i < _config._count_test; ++i)
 				{
 					ptr_vector.clear();
 
 					__int64 elapsed_time = NK::time_elapsed_function([&] {
-						for (int i = 0; i < COUNT_ALLOCATION; ++i)
+						for (int i = 0; i < _config._count_allocation; ++i)
 						{
-							size_t alloc_size = MIN_ALLOCATION_SIZE + (rand() % (MAX_ALLOCATION_SIZE - MIN_ALLOCATION_SIZE));
-							void *ptr = _allocator(alloc_size);
+							size_t alloc_size = _config._min_allocation_size + (rand() % (_config._max_allocation_size - _config._min_allocation_size));
+							void *ptr = _config._allocator(alloc_size);
 							ptr_vector.push_back(ptr);
 						}
 					});
@@ -70,45 +91,58 @@ namespace NKTester
 					_r._elapsed_allocation_vector.push_back(elapsed_time);
 
 					elapsed_time = NK::time_elapsed_function([&] {
-						for (int i = 0; i < COUNT_ALLOCATION; ++i)
+						for (int i = 0; i < _config._count_allocation; ++i)
 						{
 							void *ptr = ptr_vector.back();
 							ptr_vector.pop_back();
-							_deallocator(ptr);
+							_config._deallocator(ptr);
 						}
 					});
 
 					_r._elapsed_deallocation_vector.push_back(elapsed_time);
 				}
+
+				adjust();
 			}
 
-			void report(void)
+			void adjust(void)
 			{
 				for (auto iter = _r._elapsed_allocation_vector.begin(); iter != _r._elapsed_allocation_vector.end(); ++iter)
 				{
 					_r._total_elapsed_allocation += *iter;
-					wcout << L"thread : " << _r._thread_id << L" alloc : " << *iter << endl;
 				}
 
 				_r._average_elapsed_allocation = _r._total_elapsed_allocation / _r._elapsed_allocation_vector.size();
 
-				wcout << L"thread : " << _r._thread_id << L" alloc, total : " << _r._total_elapsed_allocation << ", average : " << _r._average_elapsed_allocation << endl;
-
 				for (auto iter = _r._elapsed_deallocation_vector.begin(); iter != _r._elapsed_deallocation_vector.end(); ++iter)
 				{
 					_r._total_elapsed_deallocation += *iter;
-					wcout << L"thread : " << _r._thread_id << L" dealloc : " << *iter << endl;
 				}
 
 				_r._average_elapsed_deallocation = _r._total_elapsed_deallocation / _r._elapsed_deallocation_vector.size();
+			}
 
-				wcout << L"thread : " << _r._thread_id << L" dealloc, total : " << _r._total_elapsed_deallocation << ", average : " << _r._average_elapsed_deallocation << endl;
+			void report(std::wostream& os)
+			{
+				for (auto iter = _r._elapsed_allocation_vector.begin(); iter != _r._elapsed_allocation_vector.end(); ++iter)
+				{
+					os << L"thread : " << _r._thread_id << L" alloc : " << *iter << endl;
+				}
+
+				os << L"thread : " << _r._thread_id << L" alloc, total : " << _r._total_elapsed_allocation << ", average : " << _r._average_elapsed_allocation << endl;
+
+				for (auto iter = _r._elapsed_deallocation_vector.begin(); iter != _r._elapsed_deallocation_vector.end(); ++iter)
+				{
+					os << L"thread : " << _r._thread_id << L" dealloc : " << *iter << endl;
+				}
+
+				os << L"thread : " << _r._thread_id << L" dealloc, total : " << _r._total_elapsed_deallocation << ", average : " << _r._average_elapsed_deallocation << endl;
 			}
 
 			void run(function<void*(size_t)> allocator, function<void(void*)> deallocator)
 			{
-				_allocator = allocator;
-				_deallocator = deallocator;
+				_config._allocator = allocator;
+				_config._deallocator = deallocator;
 
 				_t = thread([&] {
 					run_sequentially();
@@ -127,15 +161,28 @@ namespace NKTester
 				return _r;
 			}
 
+		public:
+			void set_config(const TestConfig& config)
+			{
+				_config = config;
+			}
+
+		protected:
+			typedef vector<void *> PTRVECTOR;
+
 		protected:
 			Result _r;
 			thread _t;
 
 		protected:
-			function<void*(size_t)> _allocator;
-			function<void(void*)> _deallocator;
+			TestConfig _config;
 
 		public:
+			ThreadTester(const TestConfig& config)
+				:_config(config)
+			{
+			}
+
 			ThreadTester(void)
 			{
 			}
@@ -144,48 +191,64 @@ namespace NKTester
 	public:
 		void run_thread(void)
 		{
-			ThreadTester *pThread_tester = new ThreadTester[COUNT_THREAD];
+			_pThread_tester = new ThreadTester[_config._count_thread];
 
-			for (int i = 0; i < COUNT_THREAD; i++)
+			for (int i = 0; i < _config._count_thread; i++)
 			{
-				pThread_tester[i].run(_allocator, _deallocator);
+				_pThread_tester[i].set_config(_config);
+				_pThread_tester[i].run(_config._allocator, _config._deallocator);
 			}
 
-			for (int i = 0; i < COUNT_THREAD; i++)
+			for (int i = 0; i < _config._count_thread; i++)
 			{
-				pThread_tester[i].join();
-			}
+				_pThread_tester[i].join();
+			}	
+		}
 
-			for (int i = 0; i < COUNT_THREAD; i++)
+		void report(std::wostream& os, bool detail = false)
+		{
+			if (detail)
 			{
-				pThread_tester[i].report();
+				for (int i = 0; i < _config._count_thread; i++)
+				{
+					_pThread_tester[i].report(os);
+				}
 			}
 
 			__int64 total_time_allocation = 0;
 			__int64 total_time_deallocation = 0;
-			for (int i = 0; i < COUNT_THREAD; i++)
+
+			for (int i = 0; i < _config._count_thread; i++)
 			{
-				const Result r = pThread_tester[i].get_result();
+				const Result r = _pThread_tester[i].get_result();
 				total_time_allocation += r._total_elapsed_allocation;
 				total_time_deallocation += r._total_elapsed_deallocation;
 			}
 
-			wcout << L"total alloction : " << total_time_allocation << endl;
-			wcout << L"total dealloction : " << total_time_deallocation << endl;
+			os << _config._log_name.c_str()
+				<< L", thread:" << _config._count_thread
+				<< L", allocation:" << _config._count_allocation
+				<< L", alloc_time:" << total_time_allocation << "us"
+				<< L", dealloc_time:" << total_time_deallocation << "us" << endl;
 		}
 
 	protected:
-		const function<void*(size_t)> _allocator;
-		const function<void(void*)> _deallocator;
-
-	protected:
-		typedef vector<void *> PTRVECTOR;
+		ThreadTester *_pThread_tester;
+		const TestConfig _config;
 
 	public:
-		Tester(function<void*(size_t)> allocator, function<void(void*)> deallocator)
-			:_allocator(allocator)
-			, _deallocator(deallocator)
+		Tester(const TestConfig& config)
+			:_config(config)
+			, _pThread_tester(nullptr)
 		{
+		}
+
+		~Tester(void)
+		{
+			if (_pThread_tester != nullptr)
+			{
+				delete[] _pThread_tester;
+			}
 		}
 	};
 };
