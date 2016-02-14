@@ -2,57 +2,9 @@
 #include <iostream>
 #include <fstream>
 using namespace std;
+#include <concrt.h>
 
 #include "NKTester.hpp"
-
-/*
-class TestConfig
-{
-public:
-	const int _count_allocation;
-	const int _min_allocation_size;
-	const int _max_allocation_size;
-	const int _count_thread;
-	const int _count_test;
-	function<void*(size_t)> _allocator;
-	function<void(void*)> _deallocator;
-};
-*/
-
-/*
-class NKConfig
-{
-public:
-	const static int COUNT_ALLOCATION = 10000;
-	const static int MIN_ALLOCATION_SIZE = 8;
-	const static int MAX_ALLOCATION_SIZE = 36 * 1024;
-	const static int COUNT_THREAD = 4;
-	const static int COUNT_TEST = 5;
-
-public:
-	static void *func_allocation(size_t size)
-	{
-		void *ptr = malloc(size);
-		return ptr;
-	}
-
-	static void func_deallocation(void *ptr)
-	{
-		free(ptr);
-	}
-};
-*/
-
-void *func_new(size_t size)
-{
-	void *ptr = operator new(size);
-	return ptr;
-}
-
-void func_delete(void *ptr)
-{
-	operator delete(ptr);
-}
 
 void *func_malloc(size_t size)
 {
@@ -65,10 +17,32 @@ void func_free(void *ptr)
 	free(ptr);
 }
 
+void *func_new(size_t size)
+{
+	void *ptr = operator new(size);
+	return ptr;
+}
+
+void func_delete(void *ptr)
+{
+	operator delete(ptr);
+}
+
+void *func_concurrency_alloc(size_t size)
+{
+	void *ptr = Concurrency::Alloc(size);
+	return ptr;
+}
+
+void func_concurrency_free(void *ptr)
+{
+	Concurrency::Free(ptr);
+}
+
 void print_help(const string& filename)
 {
 	wcout << filename.c_str() << L" memory_type [-standalone]" << endl;
-	wcout << L"memory_type : malloc, new" << endl;
+	wcout << L"memory_type : malloc, new, concurrency" << endl;
 }
 
 void pause(void)
@@ -85,6 +59,7 @@ int main( int argc, char *argv[] )
 		MEMORYTYPE_NOTHING,
 		MEMORYTYPE_MALLOCFREE,
 		MEMORYTYPE_NEWDELETE,
+		MEMORYTYPE_CONCURRENCY
 	};
 	
 	bool standalone = false;
@@ -101,6 +76,10 @@ int main( int argc, char *argv[] )
 		else if (strcmp(argv[1], "new") == 0)
 		{
 			memory_type = MEMORYTYPE_NEWDELETE;
+		}
+		else if (strcmp(argv[1], "concurrency") == 0)
+		{
+			memory_type = MEMORYTYPE_CONCURRENCY;
 		}
 
 		for (int i = 2; i < argc; ++i)
@@ -173,6 +152,19 @@ int main( int argc, char *argv[] )
 			config._log_name = L"newdelete";
 			config._allocator = func_new;
 			config._deallocator = func_delete;
+			config._count_thread = 4;
+			config._count_test = 5;
+			config._method_type = NKTester::TestConfig::METHODTYPE_SEQUENTIALLY;
+			config._count_allocation = 10000;
+			config._min_allocation_size = 8;
+			config._max_allocation_size = 36 * 1024;
+		}
+		break;
+	case MEMORYTYPE_CONCURRENCY:
+		{
+			config._log_name = L"concurrency";
+			config._allocator = func_concurrency_alloc;
+			config._deallocator = func_concurrency_free;
 			config._count_thread = 4;
 			config._count_test = 5;
 			config._method_type = NKTester::TestConfig::METHODTYPE_SEQUENTIALLY;
