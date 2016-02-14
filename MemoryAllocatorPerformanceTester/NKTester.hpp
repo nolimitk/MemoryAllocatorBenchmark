@@ -17,12 +17,21 @@ namespace NKTester
 	class TestConfig
 	{
 	public:
+		enum METHODTYPE
+		{
+			METHODTYPE_NOTHING,
+			METHODTYPE_SEQUENTIALLY,
+			METHODTYPE_CONCURRENT
+		};
+
+	public:
 		wstring _log_name;
 
 	public:
 		int _count_thread;
 		int _count_test;
 		int _count_allocation;
+		METHODTYPE _method_type;
 		int _min_allocation_size;
 		int _max_allocation_size;
 		function<void*(size_t)> _allocator;
@@ -35,6 +44,7 @@ namespace NKTester
 			_count_thread = other._count_thread;
 			_count_test = other._count_test;
 			_count_allocation = other._count_allocation;
+			_method_type = other._method_type;
 			_min_allocation_size = other._min_allocation_size;
 			_max_allocation_size = other._max_allocation_size;
 			_allocator = other._allocator;
@@ -70,6 +80,49 @@ namespace NKTester
 		class ThreadTester
 		{
 		public:
+			void run_concurrent(void)
+			{
+				PTRVECTOR ptr_vector;
+				ptr_vector.reserve(_config._count_allocation);
+
+				for (int i = 0; i < _config._count_test; ++i)
+				{
+					ptr_vector.clear();
+
+					__int64 elapsed_time = NK::time_elapsed_function([&] {
+						for (int i = 0; i < _config._count_allocation; ++i)
+						{
+							if (rand() % 2 == 0)
+							{
+								size_t alloc_size = _config._min_allocation_size + (rand() % (_config._max_allocation_size - _config._min_allocation_size));
+								void *ptr = _config._allocator(alloc_size);
+								ptr_vector.push_back(ptr);
+							}
+							else
+							{
+								if (ptr_vector.size() > 0)
+								{
+									void *ptr = ptr_vector.back();
+									ptr_vector.pop_back();
+									_config._deallocator(ptr);
+								}
+							}
+						}
+					});
+
+					_r._elapsed_allocation_vector.push_back(elapsed_time);
+
+					while (ptr_vector.size() > 0)
+					{
+						void *ptr = ptr_vector.back();
+						ptr_vector.pop_back();
+						_config._deallocator(ptr);
+					}
+				}
+
+				adjust();
+			}
+
 			void run_sequentially(void)
 			{
 				PTRVECTOR ptr_vector;
@@ -107,19 +160,25 @@ namespace NKTester
 
 			void adjust(void)
 			{
-				for (auto iter = _r._elapsed_allocation_vector.begin(); iter != _r._elapsed_allocation_vector.end(); ++iter)
+				if (_r._elapsed_allocation_vector.size() > 0)
 				{
-					_r._total_elapsed_allocation += *iter;
+					for (auto iter = _r._elapsed_allocation_vector.begin(); iter != _r._elapsed_allocation_vector.end(); ++iter)
+					{
+						_r._total_elapsed_allocation += *iter;
+					}
+
+					_r._average_elapsed_allocation = _r._total_elapsed_allocation / _r._elapsed_allocation_vector.size();
 				}
-
-				_r._average_elapsed_allocation = _r._total_elapsed_allocation / _r._elapsed_allocation_vector.size();
-
-				for (auto iter = _r._elapsed_deallocation_vector.begin(); iter != _r._elapsed_deallocation_vector.end(); ++iter)
+				
+				if (_r._elapsed_deallocation_vector.size() > 0)
 				{
-					_r._total_elapsed_deallocation += *iter;
-				}
+					for (auto iter = _r._elapsed_deallocation_vector.begin(); iter != _r._elapsed_deallocation_vector.end(); ++iter)
+					{
+						_r._total_elapsed_deallocation += *iter;
+					}
 
-				_r._average_elapsed_deallocation = _r._total_elapsed_deallocation / _r._elapsed_deallocation_vector.size();
+					_r._average_elapsed_deallocation = _r._total_elapsed_deallocation / _r._elapsed_deallocation_vector.size();
+				}
 			}
 
 			void report(std::wostream& os)
@@ -139,13 +198,27 @@ namespace NKTester
 				os << L"thread : " << _r._thread_id << L" dealloc, total : " << _r._total_elapsed_deallocation << ", average : " << _r._average_elapsed_deallocation << endl;
 			}
 
-			void run(function<void*(size_t)> allocator, function<void(void*)> deallocator)
+			void run(void)
 			{
-				_config._allocator = allocator;
-				_config._deallocator = deallocator;
+				if (_config._method_type == TestConfig::METHODTYPE_NOTHING)
+				{
+					_config._method_type = TestConfig::METHODTYPE_SEQUENTIALLY;
+				}
 
 				_t = thread([&] {
-					run_sequentially();
+					switch (_config._method_type)
+					{
+					case TestConfig::METHODTYPE_SEQUENTIALLY:
+						{
+							run_sequentially();
+						}
+						break;
+					case TestConfig::METHODTYPE_CONCURRENT:
+						{
+							run_concurrent();
+						}
+						break;
+					}					
 				});
 
 				_r._thread_id = _t.get_id();
@@ -196,7 +269,7 @@ namespace NKTester
 			for (int i = 0; i < _config._count_thread; i++)
 			{
 				_pThread_tester[i].set_config(_config);
-				_pThread_tester[i].run(_config._allocator, _config._deallocator);
+				_pThread_tester[i].run();
 			}
 
 			for (int i = 0; i < _config._count_thread; i++)
@@ -225,8 +298,23 @@ namespace NKTester
 				total_time_deallocation += r._total_elapsed_deallocation;
 			}
 
+			wstring str_method;
+			if (_config._method_type == TestConfig::METHODTYPE_SEQUENTIALLY)
+			{
+				str_method = L"sequentially";
+			}
+			else if (_config._method_type == TestConfig::METHODTYPE_CONCURRENT)
+			{
+				str_method = L"concurrent";
+			}
+			else
+			{
+				str_method = L"unknown";
+			}
+
 			os << _config._log_name.c_str()
 				<< L", thread:" << _config._count_thread
+				<< L", method:" << str_method.c_str()
 				<< L", allocation:" << _config._count_allocation
 				<< L", alloc_time:" << total_time_allocation << "us"
 				<< L", dealloc_time:" << total_time_deallocation << "us" << endl;

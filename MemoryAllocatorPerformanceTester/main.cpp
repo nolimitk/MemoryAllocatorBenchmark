@@ -89,6 +89,7 @@ int main( int argc, char *argv[] )
 	
 	bool standalone = false;
 	bool help = false;
+	bool concurrent = false;
 	MEMORYTYPE memory_type = MEMORYTYPE_NOTHING;
 
 	if (argc > 1)
@@ -107,6 +108,10 @@ int main( int argc, char *argv[] )
 			if (strcmp(argv[i], "-standalone") == 0)
 			{
 				standalone = true;
+			}
+			else if (strcmp(argv[i], "-concurrent") == 0)
+			{
+				concurrent = true;
 			}
 			else if (strcmp(argv[i], "-help") == 0)
 			{
@@ -139,7 +144,7 @@ int main( int argc, char *argv[] )
 		return -1;
 	}
 
-	srand(static_cast<unsigned int>(time(nullptr)));
+	//srand(static_cast<unsigned int>(time(nullptr)));
 
 	// log file
 	wofstream ofs;
@@ -157,6 +162,7 @@ int main( int argc, char *argv[] )
 			config._deallocator = func_free;
 			config._count_thread = 4;
 			config._count_test = 5;
+			config._method_type = NKTester::TestConfig::METHODTYPE_SEQUENTIALLY;
 			config._count_allocation = 10000;
 			config._min_allocation_size = 8;
 			config._max_allocation_size = 36 * 1024;
@@ -169,6 +175,7 @@ int main( int argc, char *argv[] )
 			config._deallocator = func_delete;
 			config._count_thread = 4;
 			config._count_test = 5;
+			config._method_type = NKTester::TestConfig::METHODTYPE_SEQUENTIALLY;
 			config._count_allocation = 10000;
 			config._min_allocation_size = 8;
 			config._max_allocation_size = 36 * 1024;
@@ -179,6 +186,11 @@ int main( int argc, char *argv[] )
 			print_help(argv[0]);
 		}
 		break;
+	}
+
+	if (concurrent)
+	{
+		config._method_type = NKTester::TestConfig::METHODTYPE_CONCURRENT;
 	}
 
 	NKTester::Tester t(config);
