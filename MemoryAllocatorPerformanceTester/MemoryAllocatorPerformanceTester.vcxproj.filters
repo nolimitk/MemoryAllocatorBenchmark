@@ -27,9 +27,4 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="..\bin\MAPT_malloc_free.bat">
-      <Filter>리소스 파일</Filter>
-    </None>
-  </ItemGroup>
 </Project>
