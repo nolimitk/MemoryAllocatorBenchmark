@@ -5,6 +5,7 @@ using namespace std;
 #include <concrt.h>
 
 #include "scalable_allocator.h"
+#include "tcmalloc.h"
 
 #include "NKTester.hpp"
 
@@ -52,10 +53,21 @@ void func_tbb_free(void *ptr)
 	scalable_free(ptr);
 }
 
+void *func_tc_alloc(size_t size)
+{
+	void *ptr = tc_malloc(size);
+	return ptr;
+}
+
+void func_tc_free(void *ptr)
+{
+	tc_free(ptr);
+}
+
 void print_help(const string& filename)
 {
 	wcout << filename.c_str() << L" memory_type [-standalone]" << endl;
-	wcout << L"memory_type : malloc, new, concurrency, tbb" << endl;
+	wcout << L"memory_type : malloc, new, concurrency, tbb, tcmalloc" << endl;
 }
 
 void pause(void)
@@ -74,6 +86,7 @@ int main( int argc, char *argv[] )
 		MEMORYTYPE_NEWDELETE,
 		MEMORYTYPE_CONCURRENCY,
 		MEMORYTYPE_TBBMALLOC,
+		MEMORYTYPE_TCMALLOC,
 	};
 	
 	bool standalone = false;
@@ -98,6 +111,10 @@ int main( int argc, char *argv[] )
 		else if (strcmp(argv[1], "tbb") == 0)
 		{
 			memory_type = MEMORYTYPE_TBBMALLOC;
+		}
+		else if (strcmp(argv[1], "tc") == 0)
+		{
+			memory_type = MEMORYTYPE_TCMALLOC;
 		}
 
 		for (int i = 2; i < argc; ++i)
@@ -193,6 +210,18 @@ int main( int argc, char *argv[] )
 			config._log_name = L"tbbmalloc";
 			config._allocator = func_tbb_alloc;
 			config._deallocator = func_tbb_free;
+			config._count_thread = 4;
+			config._count_test = 5;
+			config._count_allocation = 10000;
+			config._min_allocation_size = 8;
+			config._max_allocation_size = 36 * 1024;
+		}
+		break;
+	case MEMORYTYPE_TCMALLOC:
+		{
+			config._log_name = L"tcmalloc";
+			config._allocator = func_tc_alloc;
+			config._deallocator = func_tc_free;
 			config._count_thread = 4;
 			config._count_test = 5;
 			config._count_allocation = 10000;
