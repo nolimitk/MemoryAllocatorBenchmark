@@ -12,6 +12,7 @@
 ### Usage
 
 * open MemoryAllocatorBenchmark.sln
+* build with x64 platform and Release.
 * execute just batch file for benchmark.
 
 $ bin\MemoryAllocatorBenchmark.bat
