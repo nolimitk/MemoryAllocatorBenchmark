@@ -7,13 +7,14 @@
  * Google tcmalloc - https://github.com/gperftools/gperftools
 
 * You can test your custom or another memory allocator easily.
+* High-Performance multithreading applications( like server ) needs high-performance memory allocator.
 
 ### Usage
 
 * open MemoryAllocatorBenchmark.sln
 * execute just batch file for benchmark.
 
-$ bin\MAPT_malloc_free.bat
+$ bin\MemoryAllocatorBenchmark.bat
 
 ### Benchmark
 
