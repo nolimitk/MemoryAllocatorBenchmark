@@ -1,4 +1,4 @@
-# Memory Allocator Performance Tester
+# Memory Allocator Benchmark
 
 * You can measure the performance of variety memory allocators.
  * Windows LFH(malloc/free,new/delete)
@@ -7,6 +7,13 @@
  * Google tcmalloc - https://github.com/gperftools/gperftools
 
 * You can test your custom or another memory allocator easily.
+
+### Usage
+
+* open MemoryAllocatorBenchmark.sln
+* execute just batch file for benchmark.
+
+$ bin\MAPT_malloc_free.bat
 
 ### Benchmark
 
@@ -27,7 +34,7 @@
 
 ### Extras
 
-* To measure clock it uses high_resolution_clock of C++11.
+* it uses high_resolution_clock of C++11 to measure the performance.
 
 ### Enhancement Requests
 * support more memory allocators
